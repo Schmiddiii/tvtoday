@@ -1,0 +1,5 @@
+[Desktop Entry]
+Type=Application
+Name=TvToday
+StartupWMClass=TvToday
+Exec=/home/alarm/.local/bin/tvtoday

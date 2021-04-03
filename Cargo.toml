@@ -1,0 +1,21 @@
+[package]
+name = "tvtoday"
+version = "0.1.0"
+authors = ["Julian Schmidhuber <schmidhuberj2@protonmail.com>"]
+edition = "2018"
+
+[dependencies]
+gtk = "^0.9.0"
+gio = "^0.9.0"
+glib = "^0.10.0"
+gdk-pixbuf = {version = "^0.9.0", features = ["dox"]}
+relm = "^0.21.0"
+relm-derive = "^0.21.0"
+libhandy = "^0.7.0"
+pango = "^0.9.0"
+async-trait = "^0.1.0"
+tokio = {version = "^1.4.0", features = ["full"]}
+scraper = "^0.12.0"
+reqwest = {version = "^0.11.0", features = ["rustls-tls"], default-features = false}
+image = "^0.23.0"
+webp = "^0.1.0"
