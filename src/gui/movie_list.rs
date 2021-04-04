@@ -7,7 +7,7 @@ use std::thread;
 use gtk::prelude::*;
 use gtk::{
     Adjustment, Box, Button, ListBox, ListBoxRow, Orientation, ScrolledWindow, SelectionMode,
-    Viewport,
+    Spinner, Viewport,
 };
 use libhandy::{HeaderBar, HeaderBarExt};
 use relm::{connect, Component, ContainerWidget, Relm, StreamHandle, Update, Widget};
@@ -45,6 +45,7 @@ pub struct MovieListComponents {
 struct MovieListWidgets {
     root: Box,
     listbox: ListBox,
+    loading_spinner: Spinner,
 }
 
 impl<T: 'static + Provider> Update for MovieList<T> {
@@ -71,6 +72,8 @@ impl<T: 'static + Provider> Update for MovieList<T> {
                 self.components.stack.emit(SlidingStackMsg::Switch);
             }
             MovieListMsg::Reload => {
+                self.widgets.loading_spinner.set_visible(true);
+
                 let stream = self.model.relm.stream().clone();
                 self.components.stack.emit(SlidingStackMsg::ShowSecondPage);
 
@@ -87,6 +90,8 @@ impl<T: 'static + Provider> Update for MovieList<T> {
                 });
             }
             MovieListMsg::ReloadFinished((provider, program_res)) => {
+                self.widgets.loading_spinner.set_visible(false);
+
                 if let Ok(program) = program_res {
                     self.model.program = program;
                     self.reset_movies();
@@ -128,6 +133,12 @@ impl<T: 'static + Provider> Widget for MovieList<T> {
 
         let header_bar = HeaderBar::new();
         header_bar.set_title(Some("Movies"));
+
+        let loading_spinner = Spinner::new();
+        loading_spinner.set_visible(false);
+        loading_spinner.start();
+
+        header_bar.pack_start(&loading_spinner);
 
         let button_switch_stack = Button::new();
         button_switch_stack.set_image(Some(&gtk::Image::from_icon_name(
@@ -188,7 +199,11 @@ impl<T: 'static + Provider> Widget for MovieList<T> {
 
         root.show_all();
 
-        let widgets = MovieListWidgets { root, listbox };
+        let widgets = MovieListWidgets {
+            root,
+            listbox,
+            loading_spinner,
+        };
         let components = MovieListComponents { stack };
         Self {
             model,
