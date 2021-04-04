@@ -1,4 +1,4 @@
-use crate::gui::{MovieListItem, WinMsg};
+use crate::gui::{MovieListItem, SlidingStack, SlidingStackMsg, WinMsg};
 use crate::model::{Program, Provider};
 use crate::Error;
 
@@ -16,6 +16,7 @@ use tokio::runtime::Runtime;
 
 #[derive(Msg)]
 pub enum MovieListMsg<T: 'static + Provider> {
+    SwitchStack,
     Reload,
     ReloadFinished((T, Result<Program, Error>)),
     RowActivated(ListBoxRow),
@@ -34,6 +35,11 @@ pub struct MovieListModel<T: 'static + Provider> {
 pub struct MovieList<T: 'static + Provider> {
     model: MovieListModel<T>,
     widgets: MovieListWidgets,
+    components: MovieListComponents,
+}
+
+pub struct MovieListComponents {
+    stack: Component<SlidingStack<Box, ScrolledWindow>>,
 }
 
 struct MovieListWidgets {
@@ -61,8 +67,12 @@ impl<T: 'static + Provider> Update for MovieList<T> {
 
     fn update(&mut self, event: MovieListMsg<T>) {
         match event {
+            MovieListMsg::SwitchStack => {
+                self.components.stack.emit(SlidingStackMsg::Switch);
+            }
             MovieListMsg::Reload => {
                 let stream = self.model.relm.stream().clone();
+                self.components.stack.emit(SlidingStackMsg::ShowSecondPage);
 
                 let (_channel, sender) = relm::Channel::new(move |result| {
                     stream.emit(MovieListMsg::ReloadFinished(result))
@@ -119,16 +129,19 @@ impl<T: 'static + Provider> Widget for MovieList<T> {
         let header_bar = HeaderBar::new();
         header_bar.set_title(Some("Movies"));
 
-        let button_reload = Button::new();
-        button_reload.set_label("Reload");
+        let button_switch_stack = Button::new();
+        button_switch_stack.set_image(Some(&gtk::Image::from_icon_name(
+            Some("open-menu-symbolic"),
+            gtk::IconSize::Menu,
+        )));
         connect!(
             relm,
-            button_reload,
+            button_switch_stack,
             connect_clicked(_),
-            MovieListMsg::Reload
+            MovieListMsg::SwitchStack
         );
 
-        header_bar.add(&button_reload);
+        header_bar.pack_end(&button_switch_stack);
 
         root.add(&header_bar);
 
@@ -145,7 +158,26 @@ impl<T: 'static + Provider> Widget for MovieList<T> {
 
         viewport.add(&listbox);
 
-        root.add(&scrolled_window);
+        let menu_box = gtk::Box::new(Orientation::Vertical, 0);
+
+        let button_reload = Button::new();
+        button_reload.set_label("Reload");
+        connect!(
+            relm,
+            button_reload,
+            connect_clicked(_),
+            MovieListMsg::Reload
+        );
+
+        menu_box.add(&button_reload);
+
+        let stack = relm::create_component::<SlidingStack<Box, ScrolledWindow>>((
+            menu_box,
+            scrolled_window.clone(),
+        ));
+        stack.emit(SlidingStackMsg::ShowSecondPage);
+
+        root.add(stack.widget());
 
         connect!(
             relm,
@@ -157,7 +189,12 @@ impl<T: 'static + Provider> Widget for MovieList<T> {
         root.show_all();
 
         let widgets = MovieListWidgets { root, listbox };
-        Self { model, widgets }
+        let components = MovieListComponents { stack };
+        Self {
+            model,
+            widgets,
+            components,
+        }
     }
 }
 
