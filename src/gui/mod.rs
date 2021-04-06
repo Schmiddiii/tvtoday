@@ -6,7 +6,7 @@ mod win;
 
 pub use win::Win;
 
-use movie_list::MovieList;
+use movie_list::{MovieList, MovieListMsg};
 use movie_list_item::MovieListItem;
 use movie_page::{MoviePage, MoviePageMsg};
 use sliding_stack::{SlidingStack, SlidingStackMsg};

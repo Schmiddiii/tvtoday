@@ -1,5 +1,5 @@
 use crate::gui::{MovieListItem, SlidingStack, SlidingStackMsg, WinMsg};
-use crate::model::{Program, Provider};
+use crate::model::{FilterType, Program, ProgramFilter, Provider};
 use crate::Error;
 
 use std::thread;
@@ -20,11 +20,13 @@ pub enum MovieListMsg<T: 'static + Provider> {
     Reload,
     ReloadFinished((T, Result<Program, Error>)),
     RowActivated(ListBoxRow),
+    AddFilter(FilterType),
 }
 
 pub struct MovieListModel<T: 'static + Provider> {
     program: Program,
     provider: T,
+    filter: ProgramFilter,
 
     movies: Vec<Component<MovieListItem>>,
 
@@ -58,6 +60,7 @@ impl<T: 'static + Provider> Update for MovieList<T> {
         MovieListModel {
             program: Program::new(),
             provider,
+            filter: ProgramFilter::new(),
 
             movies: vec![],
 
@@ -93,7 +96,8 @@ impl<T: 'static + Provider> Update for MovieList<T> {
                 self.widgets.loading_spinner.set_visible(false);
 
                 if let Ok(program) = program_res {
-                    self.model.program = program;
+                    self.model.program = self.model.filter.filter(&program);
+
                     self.reset_movies();
                 } else {
                     self.model.program = Program::new();
@@ -101,6 +105,10 @@ impl<T: 'static + Provider> Update for MovieList<T> {
                 }
                 self.model.provider = provider.clone();
                 self.model.stream_win.emit(WinMsg::UpdateProvider(provider));
+            }
+            MovieListMsg::AddFilter(filter) => {
+                self.model.filter.add(filter);
+                self.model.relm.stream().emit(MovieListMsg::Reload);
             }
             MovieListMsg::RowActivated(row) => {
                 let index = self

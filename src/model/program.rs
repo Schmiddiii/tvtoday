@@ -1,3 +1,4 @@
+use std::iter::FromIterator;
 use std::ops::Index;
 
 use gdk_pixbuf::{Colorspace, Pixbuf};
@@ -47,6 +48,13 @@ impl Index<usize> for Program {
 
     fn index(&self, index: usize) -> &Self::Output {
         &self.content[index]
+    }
+}
+
+impl FromIterator<(Channel, Movie)> for Program {
+    fn from_iter<I: IntoIterator<Item = (Channel, Movie)>>(iter: I) -> Self {
+        let content = iter.into_iter().collect();
+        Program { content }
     }
 }
 

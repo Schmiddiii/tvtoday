@@ -1,16 +1,26 @@
-use crate::model::{Channel, Movie, Provider};
+use crate::gui::{SlidingStack, SlidingStackMsg, WinMsg};
+use crate::model::{Channel, ChannelAttribute, FilterType, Movie, MovieAttribute, Provider};
 
 use std::thread;
 
 use gtk::prelude::*;
-use gtk::{Adjustment, Box, Label, Orientation, ScrolledWindow};
+use gtk::{Adjustment, Box, Button, Label, Orientation, ScrolledWindow};
 use libhandy::{HeaderBar, HeaderBarExt};
-use relm::{Relm, Update, Widget};
+use relm::{connect, Component, Relm, StreamHandle, Update, Widget};
 use relm_derive::Msg;
 use tokio::runtime::Runtime;
 
+pub enum FilterList {
+    ChannelName,
+    MovieTitle,
+    MovieGenre,
+    MovieDivision,
+}
+
 #[derive(Msg)]
 pub enum MoviePageMsg<T: 'static + Provider> {
+    Filter(FilterList),
+    SwitchStack,
     SetProvider(T),
     Set((Channel, Movie)),
     SetMovie(Movie),
@@ -23,11 +33,13 @@ pub struct MoviePageModel<T: 'static + Provider> {
     provider: T,
 
     relm: Relm<MoviePage<T>>,
+    win_stream: StreamHandle<WinMsg<T>>,
 }
 
 pub struct MoviePage<T: 'static + Provider> {
     model: MoviePageModel<T>,
     widgets: MoviePageWidgets,
+    components: MoviePageComponents,
 }
 
 pub struct MoviePageWidgets {
@@ -40,12 +52,16 @@ pub struct MoviePageWidgets {
     label_movie_description: Label,
 }
 
+pub struct MoviePageComponents {
+    stack: Component<SlidingStack<Box, ScrolledWindow>>,
+}
+
 impl<T: 'static + Provider> Update for MoviePage<T> {
     type Model = MoviePageModel<T>;
-    type ModelParam = ();
+    type ModelParam = StreamHandle<WinMsg<T>>;
     type Msg = MoviePageMsg<T>;
 
-    fn model(relm: &Relm<MoviePage<T>>, _: Self::ModelParam) -> Self::Model {
+    fn model(relm: &Relm<MoviePage<T>>, win_stream: Self::ModelParam) -> Self::Model {
         MoviePageModel {
             channel: Channel::new(""),
             movie: Movie::new(""),
@@ -53,11 +69,48 @@ impl<T: 'static + Provider> Update for MoviePage<T> {
             provider: T::new(),
 
             relm: relm.clone(),
+            win_stream,
         }
     }
 
     fn update(&mut self, event: MoviePageMsg<T>) {
         match event {
+            MoviePageMsg::Filter(item) => {
+                self.components.stack.emit(SlidingStackMsg::ShowSecondPage);
+                let filter;
+                match item {
+                    FilterList::ChannelName => {
+                        filter = FilterType::Channel(ChannelAttribute::Name(
+                            self.model.channel.get_name(),
+                        ))
+                    }
+                    FilterList::MovieTitle => {
+                        filter =
+                            FilterType::Movie(MovieAttribute::Title(self.model.movie.get_title()))
+                    }
+                    FilterList::MovieGenre => {
+                        let genre_opt = self.model.movie.get_genre();
+                        if let Some(genre) = genre_opt {
+                            filter = FilterType::Movie(MovieAttribute::Genre(genre))
+                        } else {
+                            return;
+                        }
+                    }
+                    FilterList::MovieDivision => {
+                        let division_opt = self.model.movie.get_division();
+                        if let Some(division) = division_opt {
+                            filter = FilterType::Movie(MovieAttribute::Division(division))
+                        } else {
+                            return;
+                        }
+                    }
+                }
+
+                self.model.win_stream.emit(WinMsg::AddFilter(filter));
+            }
+            MoviePageMsg::SwitchStack => {
+                self.components.stack.emit(SlidingStackMsg::Switch);
+            }
             MoviePageMsg::Set((channel, movie)) => {
                 self.model.channel = channel;
                 self.model.movie = movie.clone();
@@ -95,10 +148,24 @@ impl<T: 'static + Provider> Widget for MoviePage<T> {
         self.widgets.root.clone()
     }
 
-    fn view(_relm: &Relm<Self>, model: Self::Model) -> Self {
+    fn view(relm: &Relm<Self>, model: Self::Model) -> Self {
         let root = Box::new(Orientation::Vertical, 0);
 
         let header_bar = HeaderBar::new();
+
+        let button_switch_stack = Button::new();
+        button_switch_stack.set_image(Some(&gtk::Image::from_icon_name(
+            Some("open-menu-symbolic"),
+            gtk::IconSize::Menu,
+        )));
+        connect!(
+            relm,
+            button_switch_stack,
+            connect_clicked(_),
+            MoviePageMsg::SwitchStack
+        );
+
+        header_bar.pack_end(&button_switch_stack);
 
         let scrolled_window = ScrolledWindow::new::<Adjustment, Adjustment>(None, None);
         let scrolled_window_box = Box::new(Orientation::Vertical, 0);
@@ -123,7 +190,57 @@ impl<T: 'static + Provider> Widget for MoviePage<T> {
         scrolled_window.set_vexpand(true);
 
         root.add(&header_bar);
-        root.add(&scrolled_window);
+
+        let menu_box = gtk::Box::new(Orientation::Vertical, 0);
+
+        let button_channel_name = Button::new();
+        button_channel_name.set_label("Block channel name");
+        connect!(
+            relm,
+            button_channel_name,
+            connect_clicked(_),
+            MoviePageMsg::Filter(FilterList::ChannelName)
+        );
+
+        let button_movie_title = Button::new();
+        button_movie_title.set_label("Block movie title");
+        connect!(
+            relm,
+            button_movie_title,
+            connect_clicked(_),
+            MoviePageMsg::Filter(FilterList::MovieTitle)
+        );
+
+        let button_movie_genre = Button::new();
+        button_movie_genre.set_label("Block movie genre");
+        connect!(
+            relm,
+            button_movie_genre,
+            connect_clicked(_),
+            MoviePageMsg::Filter(FilterList::MovieGenre)
+        );
+
+        let button_movie_division = Button::new();
+        button_movie_division.set_label("Block movie division");
+        connect!(
+            relm,
+            button_movie_division,
+            connect_clicked(_),
+            MoviePageMsg::Filter(FilterList::MovieDivision)
+        );
+
+        menu_box.add(&button_channel_name);
+        menu_box.add(&button_movie_title);
+        menu_box.add(&button_movie_genre);
+        menu_box.add(&button_movie_division);
+
+        let stack = relm::create_component::<SlidingStack<Box, ScrolledWindow>>((
+            menu_box,
+            scrolled_window.clone(),
+        ));
+        stack.emit(SlidingStackMsg::ShowSecondPage);
+
+        root.add(stack.widget());
 
         root.show_all();
 
@@ -137,7 +254,13 @@ impl<T: 'static + Provider> Widget for MoviePage<T> {
             label_movie_description,
         };
 
-        MoviePage { model, widgets }
+        let components = MoviePageComponents { stack };
+
+        MoviePage {
+            model,
+            widgets,
+            components,
+        }
     }
 }
 

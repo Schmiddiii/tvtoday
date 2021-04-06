@@ -1,5 +1,5 @@
-use crate::gui::{MovieList, MoviePage, MoviePageMsg};
-use crate::model::{Channel, Movie, Provider};
+use crate::gui::{MovieList, MovieListMsg, MoviePage, MoviePageMsg};
+use crate::model::{Channel, FilterType, Movie, Provider};
 
 use gtk::prelude::*;
 use gtk::{Box, Inhibit};
@@ -12,6 +12,7 @@ use relm_derive::Msg;
 pub enum WinMsg<T: 'static + Provider> {
     SelectedMovie((Channel, Movie)),
     UpdateProvider(T),
+    AddFilter(FilterType),
     Quit,
 }
 
@@ -34,7 +35,7 @@ struct WinWidgets {
 }
 
 struct WinComponents<T: 'static + Provider> {
-    _page_list: Component<MovieList<T>>,
+    page_list: Component<MovieList<T>>,
     page_movie: Component<MoviePage<T>>,
 }
 
@@ -67,6 +68,10 @@ impl<T: 'static + Provider> Update for Win<T> {
                     .page_movie
                     .emit(MoviePageMsg::SetProvider(provider));
             }
+            WinMsg::AddFilter(filter) => self
+                .components
+                .page_list
+                .emit(MovieListMsg::AddFilter(filter)),
             WinMsg::Quit => gtk::main_quit(),
         }
     }
@@ -88,7 +93,7 @@ impl<T: 'static + Provider> Widget for Win<T> {
             model.stream_win.clone(),
             model.provider.clone(),
         ));
-        let page_movie = relm::create_component::<MoviePage<T>>(());
+        let page_movie = relm::create_component::<MoviePage<T>>(model.stream_win.clone());
 
         page_list.widget().set_size_request(360, -1);
         page_movie.widget().set_size_request(360, -1);
@@ -114,7 +119,7 @@ impl<T: 'static + Provider> Widget for Win<T> {
         };
 
         let components = WinComponents {
-            _page_list: page_list,
+            page_list: page_list,
             page_movie,
         };
 
