@@ -4,17 +4,22 @@ use gtk::{Stack, Widget};
 use relm::{Relm, Update};
 use relm_derive::Msg;
 
+/// Messages for the sliding stack.
 #[derive(Msg)]
 pub enum SlidingStackMsg {
+    /// Switch the pages.
     Switch,
+    /// Show the second page.
     ShowSecondPage,
 }
 
+/// The model for the slidin stack containing the two widgets.
 pub struct SlidingStackModel<T1: IsA<Widget>, T2: IsA<Widget>> {
     widget1: T1,
     widget2: T2,
 }
 
+/// The sliding stack is a widget that always shows one of the given widgets, using a sliding animation to switch.
 pub struct SlidingStack<T1: IsA<Widget>, T2: IsA<Widget>> {
     model: SlidingStackModel<T1, T2>,
     stack: Stack,

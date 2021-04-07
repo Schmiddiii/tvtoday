@@ -8,6 +8,7 @@ use std::path::Path;
 use csv::{ReaderBuilder, Writer};
 
 impl ProgramFilter {
+    /// Write the filters from a file at the given path.
     pub fn write_to_path<P: AsRef<Path>>(&self, path: P) -> Result<(), Error> {
         let file = OpenOptions::new()
             .write(true)
@@ -28,6 +29,7 @@ impl ProgramFilter {
         Ok(())
     }
 
+    /// Read the filters from a file at the given path.
     pub fn read_from_path<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
         let file = OpenOptions::new().read(true).open(path)?;
 
