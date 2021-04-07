@@ -5,12 +5,12 @@ use gdk_pixbuf::{Colorspace, Pixbuf};
 use glib::Bytes;
 use image::RgbaImage;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Program {
     content: Vec<(Channel, Movie)>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Channel {
     name: String,
     icon: Option<RgbaImage>,

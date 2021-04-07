@@ -2,6 +2,8 @@ use crate::gui::{MovieListItem, SlidingStack, SlidingStackMsg, WinMsg};
 use crate::model::{FilterType, Program, ProgramFilter, Provider};
 use crate::Error;
 
+use std::fs::File;
+use std::path::PathBuf;
 use std::thread;
 
 use gtk::prelude::*;
@@ -26,12 +28,20 @@ pub enum MovieListMsg<T: 'static + Provider> {
 pub struct MovieListModel<T: 'static + Provider> {
     program: Program,
     provider: T,
+
     filter: ProgramFilter,
+    filter_path: PathBuf,
 
     movies: Vec<Component<MovieListItem>>,
 
     stream_win: StreamHandle<WinMsg<T>>,
     relm: Relm<MovieList<T>>,
+}
+
+impl<T: 'static + Provider> MovieListModel<T> {
+    fn write_filters(&self) -> Result<(), Error> {
+        self.filter.write_to_path(self.filter_path.clone())
+    }
 }
 
 pub struct MovieList<T: 'static + Provider> {
@@ -56,11 +66,31 @@ impl<T: 'static + Provider> Update for MovieList<T> {
     type Msg = MovieListMsg<T>;
 
     fn model(relm: &Relm<Self>, (stream_win, provider): Self::ModelParam) -> MovieListModel<T> {
+        let mut user_data_dir =
+            glib::get_user_data_dir().expect("Could not get user data directory");
+        user_data_dir.push("tvtoday");
+
+        if !user_data_dir.exists() {
+            std::fs::create_dir_all(user_data_dir.clone())
+                .expect("Could not create the user data directory");
+        }
+
+        let mut filter_path = user_data_dir.clone();
+        filter_path.push("filters.csv");
+
+        if !filter_path.exists() {
+            let _ = File::create(filter_path.clone());
+        }
+
+        let filter_opt = ProgramFilter::read_from_path(filter_path.clone());
+
         relm.stream().emit(MovieListMsg::Reload);
         MovieListModel {
             program: Program::new(),
             provider,
-            filter: ProgramFilter::new(),
+
+            filter: filter_opt.unwrap_or(ProgramFilter::new()),
+            filter_path,
 
             movies: vec![],
 
@@ -109,6 +139,8 @@ impl<T: 'static + Provider> Update for MovieList<T> {
             MovieListMsg::AddFilter(filter) => {
                 self.model.filter.add(filter);
                 self.model.relm.stream().emit(MovieListMsg::Reload);
+
+                let _ = self.model.write_filters();
             }
             MovieListMsg::RowActivated(row) => {
                 let index = self
